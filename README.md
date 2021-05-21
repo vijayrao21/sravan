@@ -8,11 +8,6 @@
     <artifactId>AdeptQA_Automation</artifactId>
     <version>1.0-SNAPSHOT</version>
 
-    <name>AdeptAutomation</name>
-    <url>http://www.acordsolutions.com</url>
-
-
-
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -442,3 +437,170 @@
         </repository>
     </distributionManagement>
 </project>
+
+
+package runners;
+
+import com.aventstack.extentreports.ExtentReports;
+import com.aventstack.extentreports.reporter.ExtentHtmlReporter;
+import io.cucumber.testng.AbstractTestNGCucumberTests;
+import io.cucumber.testng.CucumberOptions;
+import libraries.ConfigReader;
+import libraries.DBAccess;
+import libraries.ReadEmails;
+import org.testng.annotations.*;
+import stepDefinations.TestBase;
+import java.io.File;
+import java.io.IOException;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+
+
+@CucumberOptions
+        (features = "src/test/resources",
+                plugin = {"pretty", "html:target/cucumber-html-report.html"
+                        ,"html:target/cucumber_reports/cucumber_pretty.html"
+                        ,"json:target/cucumber_reports/cucumberTestReport.json"
+//                        ,"com.aventstack.extentreports.cucumber.adapter.ExtentCucumberAdapter"
+                },
+                glue = {"stepDefinations"},
+
+//                tags="@DAILYRUN")
+                tags="@RUN")
+//                tags="@API")
+//                tags="@UAT")
+//                tags="@UI")
+//                tags="@CLAIMS")
+//                tags = "@ADMIN")
+//                tags = "@ADMINAPI_E2E")
+//tags = "@GDE2GDE")
+
+public class TestRunner extends AbstractTestNGCucumberTests {
+    static SimpleDateFormat format = null;
+    static Calendar cal = null;
+    String reportTime;
+    public Object[][] data;
+
+    static {
+        System.setProperty("log4j.configurationFile", "log4j2.xml");
+    }
+
+//    @AfterMethod
+    public void closeBrowser() throws SQLException {
+        if (TestBase.adeptDriver == null) {
+        } else {
+            TestBase.adeptDriver.quit();
+        }
+        if (TestBase.thDriver == null) {
+        } else {
+            TestBase.thDriver.quit();
+        }
+        if (TestBase.secondDriver == null) {
+        } else {
+            TestBase.secondDriver.quit();
+        }
+        if (TestBase.cthDriver == null) {
+        } else {
+            TestBase.cthDriver.quit();
+        }
+    }
+
+
+    @BeforeSuite
+    public void setUp() throws IOException {
+        String tempBrowser = System.getProperty("Browser");
+        TestBase.browser = ConfigReader.getConfigValue("Browser");
+        TestBase.expWait = Integer.parseInt(ConfigReader.getConfigValue("WaitTime"));
+        if(tempBrowser != null && !tempBrowser.isEmpty()){
+            TestBase.browser = tempBrowser;
+        }
+        System.out.println("Browser#"+TestBase.browser);
+
+        String tempEnv = System.getProperty("env");
+        TestBase.env = ConfigReader.getConfigValue("Env");
+        if (tempEnv != null && !tempEnv.isEmpty()) {
+            TestBase.env = tempEnv;
+        }
+        System.out.println("Environment#"+TestBase.env);
+
+        String tempSendMail = System.getProperty("sendmail");
+        TestBase.sendmail = ConfigReader.getConfigValue("sendmail");
+        if (tempSendMail != null && !tempSendMail.isEmpty()) {
+            TestBase.sendmail = tempSendMail;
+        }
+        System.out.println("SendMail#"+TestBase.sendmail);
+
+        String temprecipients = System.getProperty("recipients");
+        TestBase.recipients = ConfigReader.getConfigValue("recipients");
+        if (temprecipients != null && !temprecipients.isEmpty()) {
+            TestBase.recipients = temprecipients;
+        }
+        System.out.println("Recipients#"+TestBase.recipients);
+
+        String tempUserName = System.getProperty("username");
+        TestBase.username = ConfigReader.getConfigValue("UserName_" + TestBase.env.toUpperCase());
+        if (tempUserName != null && !tempUserName.isEmpty()) {
+            TestBase.username = tempUserName;
+        }
+        System.out.println("Username#"+TestBase.username);
+
+        String tempPassword = System.getProperty("password");
+        TestBase.password = ConfigReader.getConfigValue("Password_" + TestBase.env.toUpperCase());
+        if (tempPassword != null && !tempPassword.isEmpty()) {
+            TestBase.password = tempPassword;
+        }
+
+        DBAccess.con=null;
+        DBAccess.stmt=null;
+        setUpExtentReports();
+    }
+
+    private void setUpExtentReports() {
+        cal = Calendar.getInstance();
+        format = new SimpleDateFormat("dd_MMM_yyyy_hh_mm_ss");
+        TestBase.reports = new ExtentReports();
+        SimpleDateFormat formatt = new SimpleDateFormat("ddMMMyyyy_HH-mm");
+        reportTime = formatt.format(cal.getTime());
+        TestBase.reportName = System.getProperty("user.dir") + "/Reports/AdeptExtentReport.html";
+        TestBase.htmlReporter = new ExtentHtmlReporter(new File(TestBase.reportName));
+        TestBase.htmlReporter.loadXMLConfig(String.valueOf(new File(System.getProperty("user.dir") + "/src/test/resources/extent-config.xml")));
+        TestBase.reports.setSystemInfo("Environment",   TestBase.env);
+        TestBase.reports.setSystemInfo("Browser",   TestBase.browser);
+        TestBase.reports.setSystemInfo("Author", "Vijay Bompally");
+        TestBase.reports.setSystemInfo("Executed By", System.getProperty("user.name"));
+        TestBase.reports.setSystemInfo("Operating System", System.getProperty("os.name"));
+        TestBase.reports.attachReporter( TestBase.htmlReporter);
+    }
+
+    @BeforeClass
+    public static void setup() throws IOException {
+
+    }
+
+    @AfterSuite
+    public void closeDB() throws SQLException {
+        if (DBAccess.con != null) {
+            try {
+                DBAccess.con.close();
+            } catch (SQLException e) { }
+        }
+        if (DBAccess.stmt != null) {
+            try {
+                DBAccess.stmt.close();
+            } catch (SQLException e) {}
+        }
+        System.out.println("DB connections closed");
+    }
+
+    @AfterSuite
+    public void teardown() {
+        try {
+            if(TestBase.sendmail.equalsIgnoreCase("yes")) {
+                ReadEmails.sendReportMail(TestBase.reportName);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
